@@ -2,5 +2,5 @@ language c
 sudo: false # only for faster builds
 compiler: gcc
 script:
-  gcc -o pallindrome pallindrome.c // we can use gcc instead of clang too
+  gcc -o pallindrome pallindrome.c
   ./pallindrome.c 
