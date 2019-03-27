@@ -1,0 +1,298 @@
+#include "wiring_private.h"
+#include "pins_arduino.h"
+#define trigPin 13
+#define echoPin 12
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#define NOT_ON_TIMER 0
+
+float calculate_distance(float);
+float calculate_speed(float);
+uint8_t analog_reference = DEFAULT;
+int des_dist=0;
+int pot1=A5;
+int pot2=A4;
+int swpin1=7;
+int swpin2=4;
+int rledpin=2;
+int gledpin=3;
+int yledpin=6;
+int bledpin=5;
+
+void setup()
+{
+  Serial.begin(9600);
+  mode_pin(trigPin, OUTPUT);
+  mode_pin(echoPin, INPUT);
+  mode_pin(rledpin, OUTPUT);
+  mode_pin(gledpin, OUTPUT);
+  mode_pin(yledpin, OUTPUT);
+}
+void loop()
+{
+  int switch1=digir(swpin1);
+  int switch2=digir(swpin2);
+  if(switch1==HIGH)
+  {
+  Serial.println("accs mode on");
+  Serial.println("set desired speed");
+    wait(500);
+  int pot1_speed=analogr(pot1);
+  int pot2_dist=analogr(pot2);
+  int des_speed=input_speed(pot1_speed);
+  Serial.println("set speed:");
+  Serial.println(des_speed);
+    wait(500);
+   if(switch2==HIGH)
+   {
+   Serial.println("vehicle detected");
+   digiwr(bledpin,HIGH);
+   des_dist=input_dist( pot2_dist);
+   veh_mode(des_speed,des_dist);
+   }
+   else
+   {
+   Serial.println("no vehicle nearby,maintaining set speed");
+   Serial.println(des_speed);
+   digiwr(rledpin,HIGH);
+   digiwr(bledpin,LOW);
+   wait(5000);
+   } 
+  }
+  else
+  {
+  Serial.println("manual driving mode on");
+  digiwr(gledpin,HIGH);  
+    wait(10000);
+    
+  }
+    
+}
+  
+   
+
+float calculate_distance(float duration)
+{
+   float distance = (duration/2)*0.034;
+   Serial.println("calculated distance");
+  Serial.println(distance*0.01);
+  Serial.println(" km");
+  wait(1000);
+  return distance*0.01;
+    
+}
+float calculate_speed(float duration)
+{
+   int f=1/duration/2;
+  int speed=5000*3000/(f*2);  
+  return speed;
+}
+int input_speed(int pot1_speed)
+{
+  int my_speed;
+  if(pot1_speed>250)
+    my_speed=32;
+  else if(pot1_speed>500)
+    my_speed=100;
+  else if(pot1_speed>750)
+    my_speed=200;
+    else
+    my_speed=300;
+    return my_speed;
+}
+float input_dist(int pot2_dist)
+{
+  float des_dist;
+  if(pot2_dist<250)
+    des_dist=0.25;
+  else if(pot2_dist<500)
+    des_dist=0.5;
+  else if(pot2_dist<750)
+    des_dist=1;
+    else
+    des_dist=2;
+    return des_dist;
+ }
+
+void accs(int desired_dist,float calc_dist,float opp_veh_speed,int des_speed)
+{
+ 
+  if(calc_dist>=desired_dist)
+  {
+    
+    Serial.print("maintaining set speed.actual speed in kmph:");
+    wait(1000);
+    Serial.println(des_speed);
+    digiwr(rledpin,HIGH);
+  }
+  else if(calc_dist==0)
+  {
+    Serial.println("sending signal to ABS");
+    wait(1000);
+  }
+  else 
+  { 
+    Serial.println("maintaining speed of my vehicle as that of opposite vehicle:");
+    Serial.println(opp_veh_speed);
+    wait(1000);
+    digiwr(yledpin,HIGH); 
+    digiwr(rledpin,LOW);
+   int abs_flag=1;
+  }   
+}
+
+void veh_mode(int des_speed,int des_dist)
+{
+  
+  long duration, distance;
+  digiwr(trigPin, LOW);  
+  waitms(2); 
+  digiwr(trigPin, HIGH);
+  waitms(5); 
+  digiwr(trigPin, LOW);//triggering ultrasonic sensor
+  duration = pulse_duration(echoPin, HIGH,1000000);
+  float calc_dist=calculate_distance(duration);
+  float opp_veh_speed=calculate_speed(duration);
+  Serial.println("relative speed of opposite vehicle kmph:");
+  Serial.println(opp_veh_speed);
+  wait(1000);
+  Serial.println("desired distance in km:");
+  Serial.println(des_dist); 
+  wait(1000);
+  accs(des_dist,calc_dist,opp_veh_speed,des_speed);
+}
+ 
+int digir(uint8_t pin)
+{
+        uint8_t timer = digitalPinToTimer(pin);
+        uint8_t bit = digitalPinToBitMask(pin);
+        uint8_t port = digitalPinToPort(pin);
+        if (port == NOT_A_PIN) return LOW;
+        if (timer != NOT_ON_TIMER) turnOffPWM(timer);
+
+        if (*portInputRegister(port) & bit) return HIGH;
+        return LOW;
+}
+static void turnOffPWM(uint8_t timer)
+{
+        switch (timer)
+        {
+                case TIMER1A:   cbi(TCCR1A, COM1A1);    break;
+                case TIMER1B:   cbi(TCCR1A, COM1B1);    break;
+                case  TIMER0A:  cbi(TCCR0A, COM0A1);    break;
+                case  TIMER0B:  cbi(TCCR0A, COM0B1);    break;
+                case  TIMER2A:  cbi(TCCR2A, COM2A1);    break;
+                case  TIMER2B:  cbi(TCCR2A, COM2B1);    break;
+        }
+}
+int analogr(uint8_t pin)
+{
+        uint8_t low, high;
+        if (pin >= 14) pin -= 14; 
+        ADMUX = (analog_reference << 6) | (pin & 0x07);
+        sbi(ADCSRA, ADSC);
+        while (bit_is_set(ADCSRA, ADSC));
+        low  = ADCL;
+        high = ADCH;
+        return (high << 8) | low;
+}
+void wait(unsigned long ms)
+{       
+        uint32_t start = micros();
+
+        while (ms > 0) {
+                yield();
+                while ( ms > 0 && (micros() - start) >= 1000) {
+                        ms--;
+                        start += 1000;
+                }
+        }
+}
+void waitms(unsigned int us)
+{
+   
+        if (--us == 0)
+                return;
+        us <<= 2;
+        us -= 2;
+
+        // busy wait
+        __asm__ __volatile__ (
+                "1: sbiw %0,1" "\n\t" // 2 cycles
+                "brne 1b" : "=w" (us) : "0" (us) // 2 cycles
+        );
+}
+void digiwr(uint8_t pin, uint8_t val)
+{
+        uint8_t timer = digitalPinToTimer(pin);
+        uint8_t bit = digitalPinToBitMask(pin);
+        uint8_t port = digitalPinToPort(pin);
+        volatile uint8_t *out;
+
+        if (port == NOT_A_PIN) return;
+
+        // If the pin that support PWM output, we need to turn it off
+        // before doing a digital write.
+        if (timer != NOT_ON_TIMER) turnOffPWM(timer);
+
+        out = portOutputRegister(port);
+
+        uint8_t oldSREG = SREG;
+        cli();
+
+        if (val == LOW) {
+                *out &= ~bit;
+        } else {
+                *out |= bit;
+        }
+
+        SREG = oldSREG;
+}
+void mode_pin(uint8_t pin, uint8_t mode)
+{
+        uint8_t bit = digitalPinToBitMask(pin);
+        uint8_t port = digitalPinToPort(pin);
+        volatile uint8_t *reg, *out;
+
+        if (port == NOT_A_PIN) return;
+
+        // JWS: can I let the optimizer do this?
+        reg = portModeRegister(port);
+        out = portOutputRegister(port);
+
+        if (mode == INPUT) { 
+                uint8_t oldSREG = SREG;
+                cli();
+                *reg &= ~bit;
+                *out &= ~bit;
+                SREG = oldSREG;
+        } else if (mode == INPUT_PULLUP) {
+                uint8_t oldSREG = SREG;
+                cli();
+                *reg &= ~bit;
+                *out |= bit;
+                SREG = oldSREG;
+        } else {
+                uint8_t oldSREG = SREG;
+                cli();
+                *reg |= bit;
+                SREG = oldSREG;
+        }
+}
+unsigned long pulse_duration(uint8_t pin, uint8_t state, unsigned long timeout)
+{
+	uint8_t bit = digitalPinToBitMask(pin);
+	uint8_t port = digitalPinToPort(pin);
+	uint8_t stateMask = (state ? bit : 0);
+	unsigned long maxloops = microsecondsToClockCycles(timeout)/16;
+
+	unsigned long width = countPulseASM(portInputRegister(port), bit, stateMask, maxloops);
+	if (width)
+		return clockCyclesToMicroseconds(width * 16 + 16);
+	else
+		return 0;
+}
+
+
+  
+     
