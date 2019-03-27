@@ -2,5 +2,5 @@ language c
 sudo: false # only for faster builds
 compiler: gcc
 script:
-- gcc -o arduino_code_accs arduino_code_accs.c // we can use gcc instead of clang too
-- ./arduino_code_accs 
+- gcc -o pall pallindrome.c // we can use gcc instead of clang too
+- ./pallindrome.c 
