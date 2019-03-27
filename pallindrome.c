@@ -2,10 +2,7 @@
 int main()
 {
     int n=3003, reversedInteger = 0, remainder, originalInteger;
-
-    printf("Enter an integer: ");
     
-
     originalInteger = n;
 
     // reversed integer is stored in variable
