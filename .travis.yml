@@ -1,6 +1,6 @@
-language c
+language: c
 sudo: false # only for faster builds
 compiler: gcc
 script:
-  gcc -o pallindrome pallindrome.c
-  ./pallindrome.c 
+  -gcc -o pallindrome pallindrome.c
+  -./pallindrome.c 
